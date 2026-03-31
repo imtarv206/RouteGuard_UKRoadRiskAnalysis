@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RouteGuard — ระบบประเมินความเสี่ยงเส้นทาง</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Leaflet.heat -->
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ─── HEADER ─────────────────────────────────────────────── -->
+<header class="header">
+  <div class="header-inner">
+    <div class="logo">
+      <span class="logo-icon">⬡</span>
+      <span class="logo-text">RouteGuard</span>
+      <span class="logo-sub">UK Road Safety</span>
+    </div>
+    <div class="header-meta">
+      <span id="totalAccidents" class="meta-badge">— อุบัติเหตุ</span>
+    </div>
+  </div>
+</header>
+
+<!-- ─── MAIN LAYOUT ─────────────────────────────────────────── -->
+<main class="layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+
+    <!-- Step 1: Select Points -->
+    <section class="panel">
+      <h2 class="panel-title"><span class="step-num">01</span>เลือกจุดเดินทาง</h2>
+      <p class="panel-hint">พิมพ์ชื่อสถานที่ หรือคลิกบนแผนที่</p>
+
+      <div class="point-row" id="originRow">
+        <span class="point-dot origin-dot"></span>
+        <div class="point-info">
+          <label>ต้นทาง</label>
+          <div class="search-wrap">
+            <input type="text" id="originSearch" class="place-input" placeholder="ค้นหาสถานที่…" autocomplete="off" />
+            <div class="search-dropdown" id="originDropdown"></div>
+          </div>
+          <span id="originText" class="coord-text">ยังไม่ได้เลือก</span>
+        </div>
+        <button class="clear-btn" onclick="clearPoint('origin')" title="ล้าง">✕</button>
+      </div>
+
+      <div class="point-row" id="destRow">
+        <span class="point-dot dest-dot"></span>
+        <div class="point-info">
+          <label>ปลายทาง</label>
+          <div class="search-wrap">
+            <input type="text" id="destSearch" class="place-input" placeholder="ค้นหาสถานที่…" autocomplete="off" />
+            <div class="search-dropdown" id="destDropdown"></div>
+          </div>
+          <span id="destText" class="coord-text">ยังไม่ได้เลือก</span>
+        </div>
+        <button class="clear-btn" onclick="clearPoint('dest')" title="ล้าง">✕</button>
+      </div>
+    </section>
+
+    <!-- Step 2: Context Filters -->
+    <section class="panel">
+      <h2 class="panel-title"><span class="step-num">02</span>ปัจจัยการเดินทาง</h2>
+
+      <div class="filter-group">
+        <label class="filter-label">เวลาเดินทาง</label>
+        <div class="time-input-wrap">
+          <div class="time-field">
+            <label class="time-sub-label">เริ่ม</label>
+            <input type="number" id="timeFrom" min="0" max="23" placeholder="0" class="hour-input" />
+            <span class="hour-unit">น.</span>
+          </div>
+          <span class="time-arrow">→</span>
+          <div class="time-field">
+            <label class="time-sub-label">ถึง</label>
+            <input type="number" id="timeTo" min="0" max="23" placeholder="23" class="hour-input" />
+            <span class="hour-unit">น.</span>
+          </div>
+          <button class="time-clear-btn" onclick="clearTimeInput()" title="ล้าง">ทุกช่วง</button>
+        </div>
+        <div class="time-preview" id="timePreview">ทุกช่วงเวลา</div>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label">วัน</label>
+        <div class="chip-group" id="dayChips">
+          <button class="chip active" data-val="any">ทุกวัน</button>
+          <button class="chip" data-val="Monday">จ.</button>
+          <button class="chip" data-val="Tuesday">อ.</button>
+          <button class="chip" data-val="Wednesday">พ.</button>
+          <button class="chip" data-val="Thursday">พฤ.</button>
+          <button class="chip" data-val="Friday">ศ.</button>
+          <button class="chip" data-val="Saturday">ส.</button>
+          <button class="chip" data-val="Sunday">อา.</button>
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label">สภาพอากาศ</label>
+        <div class="chip-group" id="weatherChips">
+          <button class="chip active" data-val="any">ทุกสภาพ</button>
+          <button class="chip" data-val="Fine">แจ่มใส</button>
+          <button class="chip" data-val="Rain">ฝนตก</button>
+          <button class="chip" data-val="Fog">หมอก</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Step 3: Analyze -->
+    <section class="panel">
+      <h2 class="panel-title"><span class="step-num">03</span>วิเคราะห์เส้นทาง</h2>
+      <button class="analyze-btn" id="analyzeBtn" onclick="analyzeRoute()" disabled>
+        <span class="btn-icon">▶</span> วิเคราะห์เส้นทาง
+      </button>
+      <button class="secondary-btn" onclick="clearAll()">ล้างทั้งหมด</button>
+    </section>
+
+    <!-- Result Panel (hidden until analysis) -->
+    <section class="panel result-panel" id="resultPanel" style="display:none">
+      <h2 class="panel-title"><span class="step-num">04</span>สรุปผลการวิเคราะห์</h2>
+
+      <!-- Route Summary -->
+      <div class="route-summary" id="routeSummary"></div>
+
+      <!-- Filter summary -->
+      <div class="filter-summary" id="filterSummary"></div>
+
+      <div class="risk-badge-wrap">
+        <div class="risk-badge" id="riskBadge">
+          <div class="risk-badge-content">
+            <span class="risk-label" id="riskLabel">—</span>
+            <div class="risk-score-group">
+              <span class="risk-score" id="riskScore">0</span>
+              <span class="risk-unit">/ 100</span>
+            </div>
+            <div class="risk-meter">
+              <div class="risk-fill" id="riskFill"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stat-grid" id="statGrid"></div>
+
+      <div class="recs" id="recsBox"></div>
+
+      <!-- Export buttons -->
+      <div class="export-buttons">
+        <button class="export-btn" onclick="exportSummaryJson()" title="ดาวน์โหลด JSON">
+          <span class="btn-icon">📥</span> JSON
+        </button>
+        <button class="export-btn" onclick="exportSummaryPdf()" title="ดาวน์โหลด PDF">
+          <span class="btn-icon">📄</span> PDF
+        </button>
+        <button class="export-btn" onclick="printSummary()" title="พิมพ์">
+          <span class="btn-icon">🖨️</span> พิมพ์
+        </button>
+      </div>
+    </section>
+
+  </aside>
+
+  <!-- MAP -->
+  <div class="map-wrap">
+    <div id="map"></div>
+    <div class="map-legend">
+      <span class="leg-item"><span class="leg-dot" style="background:#22c55e"></span>ต่ำ</span>
+      <span class="leg-item"><span class="leg-dot" style="background:#f59e0b"></span>ปานกลาง</span>
+      <span class="leg-item"><span class="leg-dot" style="background:#ef4444"></span>สูง</span>
+    </div>
+    <div class="map-tip" id="mapTip">คลิกแผนที่เพื่อเลือกต้นทาง</div>
+    <div class="loading-overlay" id="loadingOverlay" style="display:none">
+      <div class="spinner"></div>
+      <span>กำลังวิเคราะห์เส้นทาง…</span>
+    </div>
+  </div>
+
+</main>
+
+<script src="map.js"></script>
+</body>
+</html>

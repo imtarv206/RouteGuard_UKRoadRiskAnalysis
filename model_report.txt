@@ -1,0 +1,35 @@
+Dataset: 2,047,081 records
+Severe: 312,679 (15.3%)
+Slight: 1,734,402 (84.7%)
+Features: ['Hour', 'Speed_limit', 'Day_of_Week', 'Weather_Group', 'Road_Type', 'Light_Group', 'Urban_or_Rural_Area']
+Train: 1,637,664  |  Test: 409,417
+
+ROC AUC: 0.6081
+
+Classification Report:
+              precision    recall  f1-score   support
+
+      Slight       0.85      1.00      0.92    346881
+      Severe       0.00      0.00      0.00     62536
+
+    accuracy                           0.85    409417
+   macro avg       0.42      0.50      0.46    409417
+weighted avg       0.72      0.85      0.78    409417
+
+
+Top 10 Feature Importances:
+    Hour                                     0.1970
+    Urban_or_Rural_Area_Rural                0.1578
+    Speed_limit                              0.1520
+    Road_Type_Single carriageway             0.1489
+    Weather_Group_Fine                       0.0696
+    Light_Group_Day                          0.0545
+    Light_Group_Dark_None                    0.0417
+    Urban_or_Rural_Area_Urban                0.0413
+    Day_of_Week_Sunday                       0.0412
+    Road_Type_Roundabout                     0.0331
+
+P(severe) median: 0.1373
+P(severe) mean: 0.1528
+
+Model saved: accident_model.joblib (0.5 MB)
