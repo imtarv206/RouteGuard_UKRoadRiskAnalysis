@@ -146,6 +146,8 @@ def step_clean_coordinates(df: pd.DataFrame, report: list) -> pd.DataFrame:
 
 
 def step_clean_severity(df: pd.DataFrame, report: list) -> pd.DataFrame:
+    before = len(df)
+
     # Map text labels to numeric if present (e.g. "Fatal" → 1)
     text_to_num = {
         "fatal": 1, "serious": 2, "slight": 3,
@@ -161,14 +163,18 @@ def step_clean_severity(df: pd.DataFrame, report: list) -> pd.DataFrame:
     else:
         df["Accident_Severity"] = pd.to_numeric(df["Accident_Severity"], errors="coerce")
 
+    # Drop rows with invalid/missing severity instead of guessing
+    # Defaulting to any value would bias the model's severity distribution
     invalid_mask = ~df["Accident_Severity"].isin(SEVERITY_VALID)
     invalid_count = int(invalid_mask.sum())
     if invalid_count:
-        df.loc[invalid_mask, "Accident_Severity"] = 3   # default to Slight
-        report.append(f"Severity out-of-range (→3) : {invalid_count:,}")
-        print(f"   Severity out-of-range (defaulted to 3): {invalid_count:,}")
+        df = df[~invalid_mask]
+        report.append(f"Severity invalid/missing (dropped) : {invalid_count:,}")
+        print(f"   Severity invalid/missing: {invalid_count:,} rows dropped")
 
     df["Accident_Severity"] = df["Accident_Severity"].astype(int)
+    removed = before - len(df)
+    report.append(f"Severity rows removed total : {removed:,}")
     report.append(f"Severity distribution:\n{df['Accident_Severity'].value_counts().to_string()}")
     return df
 
@@ -179,9 +185,18 @@ def step_clean_casualties(df: pd.DataFrame, report: list) -> pd.DataFrame:
         report.append("Number_of_Casualties: column absent — filled with 1")
         print("   Number_of_Casualties: missing → filled with 1")
     else:
+        before = len(df)
         df["Number_of_Casualties"] = pd.to_numeric(
             df["Number_of_Casualties"], errors="coerce"
-        ).fillna(1).clip(lower=1).astype(int)
+        )
+        # Drop rows with null or invalid casualties (≤ 0)
+        invalid = df["Number_of_Casualties"].isna() | (df["Number_of_Casualties"] <= 0)
+        dropped = int(invalid.sum())
+        if dropped:
+            df = df[~invalid]
+            print(f"   Number_of_Casualties invalid/null: {dropped:,} rows dropped")
+            report.append(f"Number_of_Casualties invalid (dropped) : {dropped:,}")
+        df["Number_of_Casualties"] = df["Number_of_Casualties"].astype(int)
         report.append(f"Number_of_Casualties range: {df['Number_of_Casualties'].min()}–{df['Number_of_Casualties'].max()}")
     return df
 
@@ -191,24 +206,32 @@ def step_clean_time(df: pd.DataFrame, report: list) -> pd.DataFrame:
         report.append("Time: column absent — skipped")
         return df
 
+    before = len(df)
+
     # Standardise to HH:MM
-    # The dataset has values like "13:30" — ensure consistent format
     df["Time"] = df["Time"].astype(str).str.strip()
 
-    # Try to parse and reformat
+    # Try to parse
     parsed = pd.to_datetime(df["Time"], format="%H:%M", errors="coerce")
-    # Some rows might be "1:30" (single digit hour)
-    parsed_single = pd.to_datetime(df["Time"], format="%H:%M", errors="coerce")
+    # Fallback for non-standard formats (e.g. "1:30")
     fallback = pd.to_datetime(df["Time"], errors="coerce")
     parsed = parsed.fillna(fallback)
 
-    null_time = int(parsed.isna().sum())
+    # Drop rows where time could not be parsed
+    null_mask = parsed.isna()
+    null_count = int(null_mask.sum())
+    if null_count:
+        df = df[~null_mask]
+        parsed = parsed[~null_mask]
+        print(f"   Time unparseable: {null_count:,} rows dropped")
+        report.append(f"Time unparseable (dropped) : {null_count:,}")
+
     df["Time"] = parsed.dt.strftime("%H:%M")
-    # Derive Hour column used by RiskAnalyzer
     df["Hour"] = parsed.dt.hour
 
-    report.append(f"Time nulls after parse : {null_time:,}")
-    print(f"   Time nulls after parse : {null_time:,}")
+    removed = before - len(df)
+    report.append(f"Time rows removed total : {removed:,}")
+    print(f"   Time rows after cleaning : {len(df):,} ({removed:,} removed)")
     return df
 
 
@@ -216,7 +239,7 @@ def step_clean_date(df: pd.DataFrame, report: list) -> pd.DataFrame:
     if "Date" not in df.columns:
         return df
 
-    df["Date"] = pd.to_datetime(df["Date"], dayfirst=True, errors="coerce")
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
     null_dates = int(df["Date"].isna().sum())
 
     # Derive Year / Month for optional downstream use
